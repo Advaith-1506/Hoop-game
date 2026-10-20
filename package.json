@@ -1,1 +1,21 @@
-{"name":"hoop-game-frontend","version":"0.1.0","private":true,"type":"module","scripts":{"dev":"vite --host 0.0.0.0","build":"vite build","preview":"vite preview --host 0.0.0.0"},"devDependencies":{"vite":"^7.1.0"}}
+{
+  "name": "hoop-game-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "bridge": "node bridge/index.js",
+    "bridge:ports": "node bridge/index.js --list",
+    "test:bridge": "node --test bridge/*.test.js"
+  },
+  "devDependencies": {
+    "vite": "^7.1.0"
+  },
+  "dependencies": {
+    "serialport": "^13.0.0",
+    "ws": "^8.22.0"
+  }
+}
