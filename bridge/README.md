@@ -52,3 +52,13 @@ The bridge listens only on loopback and accepts browser connections from localho
 `npm run test:bridge` tests fragmented serial input, consecutive baskets, noisy lines, actual WebSocket forwarding, connection statuses, and rejection of unrelated browser origins. `npm run build` checks that the existing frontend still builds.
 
 Physical Arduino/IR testing remains pending. Frontend wiring and the standalone simulator are subsequent approved-plan steps.
+
+## Step 2: frontend connection
+
+Run `npm run dev` in a second terminal and open the localhost URL on the same computer as the bridge. The page automatically connects to `ws://127.0.0.1:8787` and retries every two seconds. The header distinguishes bridge offline, bridge ready but Arduino offline, and Arduino connected. Spacebar and Add basket remain available in every connection state.
+
+Start a game before breaking the beam: hardware points only count during an active turn, and are ignored before starting, between turns, after a reset, or after time expires. The Arduino must send `SCORE` on its own line. Messages such as `SCORE! Total: 1` are ignored.
+
+`VITE_BRIDGE_URL` can override the connection address for a local build. Hosted pages default to simulation mode: direct Netlify-to-local-Arduino access remains outside this step and requires addressing origin and browser security requirements. Do not expose the USB bridge publicly.
+
+`npm run test:bridge` now also verifies the frontend connection protocol, rejection of malformed events, disconnect status, automatic retry, and cleanup. Full physical beam-to-browser testing remains pending until the Arduino is available.

@@ -1,5 +1,6 @@
 import './style.css';
 import { receiveSensorMessage } from './scoring.js';
+import { connectBridge } from './bridge-client.js';
 
 const modes = {
   short: {name:'30 second game', label:'30 SEC', seconds:30, description:'A quick run. Make every shot count.'},
@@ -12,6 +13,24 @@ let deadline = 0, remaining = 30, started = 0, elapsed = 0, result = null;
 let history;
 try { history = JSON.parse(localStorage.getItem('baseline-history') || '[]'); if (!Array.isArray(history)) history = []; } catch { history = []; }
 const app = document.querySelector('#app');
+const localHost = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+const bridgeUrl = import.meta.env.VITE_BRIDGE_URL || (localHost ? 'ws://127.0.0.1:8787' : '');
+let bridgeStatus = bridgeUrl ? 'connecting' : 'simulation';
+const connectionLabels = {
+  simulation: 'Simulation mode',
+  connecting: 'Connecting to bridge…',
+  offline: 'Bridge offline · Test mode',
+  waiting: 'Bridge ready · Arduino offline',
+  connected: 'Arduino connected',
+};
+function updateConnection(status) {
+  bridgeStatus = status;
+  const badge = document.querySelector('.connection');
+  if (!badge) return;
+  badge.dataset.status = status;
+  badge.querySelector('.connection-label').textContent = connectionLabels[status];
+}
+
 const escape = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const clock = seconds => `${String(Math.floor(seconds / 60)).padStart(2,'0')}:${String(seconds % 60).padStart(2,'0')}`;
 const ball = '<svg viewBox="0 0 40 40" fill="none" aria-hidden="true"><circle cx="20" cy="20" r="17"/><path d="M3 20h34M20 3v34M8 8c16 7 16 17 0 24M32 8c-16 7-16 17 0 24"/></svg>';
@@ -19,7 +38,7 @@ const ball = '<svg viewBox="0 0 40 40" fill="none" aria-hidden="true"><circle cx
 function render() {
   const current = modes[mode];
   app.innerHTML = `
-  <header class="header"><a class="brand" href="./" aria-label="Baseline home">${ball}<span>baseline<span class="brand-dot">.</span></span></a><div class="header-right"><span class="connection"><i></i> Simulation mode</span><span class="club">THE HOME COURT</span></div></header>
+  <header class="header"><a class="brand" href="./" aria-label="Baseline home">${ball}<span>baseline<span class="brand-dot">.</span></span></a><div class="header-right"><span class="connection" data-status="${bridgeStatus}" role="status"><i></i><span class="connection-label">${connectionLabels[bridgeStatus]}</span></span><span class="club">THE HOME COURT</span></div></header>
   <main><div class="intro"><div><p class="eyebrow">STEP UP. SHOOT YOUR SHOT.</p><h1>Your court. Your high score.</h1><p class="subtext">Pick a game, find your rhythm, and put a number on the board.</p></div><div class="court-mark">${ball}<span>BUILT FOR<br>ONE MORE SHOT.</span></div></div>
   <div class="layout"><aside class="setup"><div class="section-label"><span>01</span> SET UP YOUR GAME</div><h2>Pick your pace.</h2><div class="mode-options">${Object.entries(modes).map(([key,m]) => `<button class="mode-option ${key===mode?'selected':''}" data-mode="${key}" ${phase==='playing'||phase==='between'?'disabled':''}><span class="mode-badge">${m.label}</span><span><strong>${m.name}</strong><small>${m.description}</small></span><span class="radio"></span></button>`).join('')}</div><form id="setup-form"><label for="player1">${mode==='versus'?'PLAYER 1':'PLAYER NAME'}</label><input id="player1" name="player1" placeholder="Enter your name" maxlength="24" required value="${escape(names[0])}" ${phase!=='ready'?'disabled':''}>${mode==='versus'?`<label for="player2">PLAYER 2</label><input id="player2" name="player2" placeholder="Your challenger’s name" maxlength="24" required value="${escape(names[1])}" ${phase!=='ready'?'disabled':''}><p class="form-note">30 seconds each · Player 1 shoots first</p>`:''}<button class="start-button" type="submit" ${phase!=='ready'?'disabled':''}>Let’s play <span>↗</span></button></form><p class="setup-note">${mode==='practice'?'Practice at your own pace. End the session whenever you’re ready.':'Your score is saved when the game ends.'}</p></aside>
   <section class="game-area" aria-label="Game scoreboard"><div class="board ${phase==='playing'?'live':''}"><div class="board-top"><span>${current.name.toUpperCase()}</span><span class="board-status"><i></i>${phase==='playing'?'LIVE':phase==='finished'?'FINAL':phase==='between'?'NEXT TURN':'READY WHEN YOU ARE'}</span></div><div class="board-center"><p class="player-heading">${phase==='ready'?'THE COURT IS YOURS':escape(names[player])}${mode==='versus' && phase!=='ready'?` <span>PLAYER ${player+1}</span>`:''}</p><div id="score" class="score">${scores[player]}</div><p class="score-label">${phase==='finished'?'FINAL SCORE':'POINTS ON THE BOARD'}</p>${current.seconds?`<div class="timer-wrap"><span>TIME LEFT</span><strong id="timer" class="timer ${remaining<=5 && phase==='playing'?'urgent':''}">${clock(remaining)}</strong></div>`:`<div class="practice-indicator"><span>∞</span> NO CLOCK. NO LIMITS.</div>`}</div>${mode==='versus'?`<div class="versus-strip"><span class="${player===0?'active':''}">${escape(names[0]||'Player 1')} <b>${scores[0]}</b></span><span class="versus-divider">VS</span><span class="${player===1?'active':''}">${escape(names[1]||'Player 2')} <b>${scores[1]}</b></span></div>`:''}<div class="board-bottom"><span>${phase==='playing'?'Stay in the zone.':phase==='finished'?'Good run. Ready for another?':phase==='between'?'Pass the ball. The challenger is up.':'Every great run starts with one shot.'}</span><span class="court-lines" aria-hidden="true">⌒</span></div></div>
@@ -57,3 +76,14 @@ window.addEventListener('keydown',e=>{if(e.code!=='Space'||e.repeat||/INPUT|TEXT
 setInterval(updateTime,100);
 document.addEventListener('visibilitychange',updateTime);
 render();
+
+if (bridgeUrl) {
+  const disconnectBridge = connectBridge({
+    url: bridgeUrl,
+    onScore: () => receiveSensorMessage('SCORE'),
+    onStatus: updateConnection,
+  });
+  window.addEventListener('pagehide', disconnectBridge, { once: true });
+  window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
+  if (import.meta.hot) import.meta.hot.dispose(disconnectBridge);
+}
