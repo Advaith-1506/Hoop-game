@@ -10,7 +10,8 @@
     "bridge": "node bridge/index.js",
     "bridge:ports": "node bridge/index.js --list",
     "test:bridge": "node --test bridge/*.test.js",
-    "bridge:simulate": "node bridge/simulator.js"
+    "bridge:simulate": "node bridge/simulator.js",
+    "test": "node --test"
   },
   "devDependencies": {
     "vite": "^7.1.0"
@@ -18,5 +19,8 @@
   "dependencies": {
     "serialport": "^13.0.0",
     "ws": "^8.22.0"
+  },
+  "engines": {
+    "node": ">=22.13.0"
   }
 }

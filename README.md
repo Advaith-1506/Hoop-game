@@ -1,6 +1,6 @@
 # Baseline — hoop game
 
-A responsive basketball scoreboard built with vanilla JavaScript and Vite, with a local Node.js bridge for Arduino USB scoring. Results currently save in browser storage; a shared leaderboard backend remains separate teammate work.
+A responsive basketball scoreboard built with vanilla JavaScript and Vite, with a local Node.js bridge for Arduino USB scoring. Results now persist in a server-side SQLite database. Requires Node.js 22.13 or newer.
 
 ## Run
 
@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-Production build: `npm run build`. Preview it with `npm run preview`.
+Production build: `npm run build`. Serve the build and database API locally with `npm run preview`. Both dev and preview create `data/hoops.sqlite`; use persistent storage and back up that file. Override its path with `DATABASE_PATH`. Run all tests with `npm test`. Static Netlify hosting alone does not run this database API.
 
 ## Included
 
@@ -18,7 +18,7 @@ Production build: `npm run build`. Preview it with `npm run preview`.
 - Two-player games: 30 seconds each, explicit handoff, both scores, winner or tie.
 - Free practice: no countdown, manual completion, separate session history.
 - Spacebar and Add basket button simulate scoring. Repeated keydown events do not add extra baskets.
-- Separate local leaderboards for timed and two-player games. Practice history is newest first.
+- Separate database-backed leaderboards for timed and two-player games. Practice history is newest first.
 - Reset discards the active run without saving it. End game saves a result; in two-player mode, End turn advances the handoff or finishes the match.
 - Timers use a monotonic deadline so inactive tabs do not slow the countdown.
 
@@ -40,20 +40,27 @@ The Arduino must emit one standalone `SCORE` line per basket at 9600 baud by def
 
 ### Backend / shared leaderboard
 
-Results currently live in localStorage under `baseline-history`, on this browser only. Replace the history read/write in `src/main.js` with your persistence API. Each completed session has this shape:
+Completed results are stored in SQLite on the server. `games` stores a unique result ID, mode, completion date (epoch milliseconds), and elapsed seconds. `scores` stores each game's player names and scores, with player order preserved for versus games. For two-player games, `games.outcome` stores `player1`, `player2`, or `tie`, calculated by the server from both scores. Other modes have a null outcome. `GET /api/games` includes this field, and the leaderboard uses it to display the winner. Player positions distinguish opponents even when names match. The schema is initialized automatically in `server/database.js`; existing two-player results are backfilled on server startup.
 
-```js
-{
-  mode: 'short', // short | long | versus | practice
-  names: ['Player one', 'Player two'],
-  scores: [12, 0],
-  date: 1791432000000, // epoch milliseconds
-  elapsed: 30 // seconds; practice session duration or final turn duration
-}
+- `GET /api/games` returns only competitive sessions (`short`, `long`, and `versus`). Free practice never enters this feed.
+- `GET /api/leaderboard?mode=short` returns ranked results for `short`, `long`, or `versus`. Each result includes `rank`, ranking `score`, names, both player scores where applicable, outcome, date, and elapsed seconds. Scores sort highest first; equal scores use earliest completion, then game ID. Versus matches rank by the higher player score. Missing, unknown, or practice modes return `400`; an empty board returns `[]`.
+- `GET /api/practice` returns only free-practice sessions, newest first, with no competitive ranking.
+- `POST /api/games` validates and saves a session of any mode atomically. Reusing an ID is safe for retries.
+
+Example POST body:
+
+```json
+{"id":"unique-game-id","mode":"versus","names":["Ada","Sam"],"scores":[12,14],"date":1791432000000,"elapsed":30}
 ```
 
-Timed boards rank by score descending; two-player matches rank by the highest score in the match. Ties use earliest completion first. Agree on a match ranking rule before implementing a shared competitive board.
+Modes are `short`, `long`, `versus`, and `practice`. Names must be 1–24 characters; scores, dates, and elapsed seconds must be nonnegative integers. Single-player modes use the first name and score. Versus requires two players.
+
+Existing `baseline-history` browser results are imported automatically. New results are also queued there until the database confirms saving; the UI reports connection failures and retries every 15 seconds and when connectivity returns. Reset still discards the active game. Leaderboards refresh every 15 seconds.
+
+The API has no authentication and accepts simulated client scores. Use it on a trusted network; public competitive deployment requires authentication and trusted scoring. `npm run preview` is a convenient local server; hosted deployment needs a Node process, persistent database storage, and appropriate production serving infrastructure.
+
+Timed boards rank by score descending; two-player matches rank by the highest score in the match. Ties use earliest completion first. The leaderboard API applies these same ranking rules.
 
 ### UI
 
-`src/main.js` contains the frontend state, rendering, and game interactions. `src/style.css` contains responsive styles. The local hardware bridge lives in `bridge/`; `src/bridge-client.js` handles the website connection, and `src/scoring.js` routes baskets to the game. No shared database backend, Arduino firmware, authentication, or cloud deployment is included. Fonts load from Google Fonts with system fallbacks.
+`src/main.js` contains the frontend state, rendering, and game interactions. `src/style.css` contains responsive styles. The local hardware bridge lives in `bridge/`; `src/bridge-client.js` handles the website connection, and `src/scoring.js` routes baskets to the game. Arduino firmware, authentication, and production cloud deployment are not included. Fonts load from Google Fonts with system fallbacks.
