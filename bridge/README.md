@@ -62,3 +62,20 @@ Start a game before breaking the beam: hardware points only count during an acti
 `VITE_BRIDGE_URL` can override the connection address for a local build. Hosted pages default to simulation mode: direct Netlify-to-local-Arduino access remains outside this step and requires addressing origin and browser security requirements. Do not expose the USB bridge publicly.
 
 `npm run test:bridge` now also verifies the frontend connection protocol, rejection of malformed events, disconnect status, automatic retry, and cleanup. Full physical beam-to-browser testing remains pending until the Arduino is available.
+
+## Step 3: test without an Arduino
+
+Do not run the real USB bridge and simulator at the same time: both use port 8787 by default.
+
+1. In one terminal, run `npm run bridge:simulate`.
+2. In another terminal, run `npm run dev` and open its localhost URL.
+3. The header must say **Simulator connected · No hardware**.
+4. Enter a name and start a game. In the simulator terminal, type `SCORE` and press Enter. The website should add exactly one point per line.
+5. Type `disconnect`: the header should report a simulated disconnect. `SCORE` should no longer add points. Type `connect`, then `SCORE`, to resume.
+6. Type a debug line such as `SCORE! Total: 3`. It should not add a point.
+7. Reset or finish a game, then send `SCORE`. The score should stay unchanged until a new game starts.
+8. Type `quit` (or press Ctrl+C) to stop the simulator. The website should report an offline bridge. Restart the simulator and confirm the website reconnects automatically without replaying baskets.
+
+Repeat scoring with 30-second, 60-second, two-player, and practice modes. For timed games, confirm points stop at expiry; for two-player mode, confirm each basket goes to the current player and none count on the handoff screen. Spacebar and Add basket should still work.
+
+The simulator sends typed input through the same serial line parser and WebSocket server as the real bridge. It does not emulate USB drivers, serial baud rate, sensor wiring, or EE firmware timing. The physical Arduino/IR acceptance test is still required before merging into main. Confirm the firmware emits one standalone SCORE line per basket at the configured baud rate, then repeat the checks above using the beam instead of terminal input.

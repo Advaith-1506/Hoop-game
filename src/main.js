@@ -18,6 +18,8 @@ const bridgeUrl = import.meta.env.VITE_BRIDGE_URL || (localHost ? 'ws://127.0.0.
 let bridgeStatus = bridgeUrl ? 'connecting' : 'simulation';
 const connectionLabels = {
   simulation: 'Simulation mode',
+  simulated: 'Simulator connected · No hardware',
+  'simulated-offline': 'Simulator · Arduino disconnected',
   connecting: 'Connecting to bridge…',
   offline: 'Bridge offline · Test mode',
   waiting: 'Bridge ready · Arduino offline',

@@ -61,3 +61,11 @@ test('missing bridge handshake triggers reconnection', t => {
   t.mock.timers.tick(2000);
   assert.equal(sockets.length, 2);
 });
+
+test('simulator status cannot be mistaken for real hardware', t => {
+  const { sockets, statuses } = setup(t);
+  sockets[0].message('{"type":"status","connected":true,"simulated":true}');
+  assert.equal(statuses.at(-1), 'simulated');
+  sockets[0].message('{"type":"status","connected":false,"simulated":true}');
+  assert.equal(statuses.at(-1), 'simulated-offline');
+});

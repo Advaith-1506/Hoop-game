@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { WebSocket, WebSocketServer } from 'ws';
 
-export function createScoreServer({ port = 8787 } = {}) {
+export function createScoreServer({ port = 8787, simulated = false } = {}) {
   // Bind to loopback: the bridge is for the computer physically attached to USB.
   const server = http.createServer((_request, response) => {
     response.writeHead(200, { 'Content-Type': 'application/json' });
@@ -19,7 +19,8 @@ export function createScoreServer({ port = 8787 } = {}) {
       } catch { return false; }
     },
   });
-  let status = { type: 'status', connected: false };
+  const makeStatus = connected => ({ type: 'status', connected, ...(simulated ? { simulated: true } : {}) });
+  let status = makeStatus(false);
   const broadcast = message => {
     const data = JSON.stringify(message);
     for (const client of wss.clients) {
@@ -43,7 +44,7 @@ export function createScoreServer({ port = 8787 } = {}) {
       });
     }),
     setConnected(connected) {
-      status = { type: 'status', connected };
+      status = makeStatus(connected);
       broadcast(status);
     },
     score() { broadcast({ type: 'score', value: 1 }); },

@@ -34,7 +34,9 @@ export function connectBridge({
       if (message.type === 'status' && typeof message.connected === 'boolean') {
         clearTimeout(handshake);
         connected = message.connected;
-        onStatus(connected ? 'connected' : 'waiting');
+        onStatus(message.simulated === true
+          ? (connected ? 'simulated' : 'simulated-offline')
+          : (connected ? 'connected' : 'waiting'));
       } else if (message.type === 'score' && message.value === 1 && connected) {
         onScore();
       }
