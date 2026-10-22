@@ -1,4 +1,4 @@
-# Arduino serial bridge — step 1
+# Arduino setup and protocol guide
 
 Requires Node.js 20.19+ (or 22.12+). This process runs on the computer attached to the Arduino by USB. It does not run on Netlify.
 
@@ -51,7 +51,7 @@ The bridge listens only on loopback and accepts browser connections from localho
 
 `npm run test:bridge` tests fragmented serial input, consecutive baskets, noisy lines, actual WebSocket forwarding, connection statuses, and rejection of unrelated browser origins. `npm run build` checks that the existing frontend still builds.
 
-Physical Arduino/IR testing remains pending. Frontend wiring and the standalone simulator are subsequent approved-plan steps.
+Frontend wiring and the standalone simulator are implemented. Physical Arduino/IR testing remains pending; record the results using [the acceptance checklist](TESTING.md).
 
 ## Step 2: frontend connection
 
@@ -79,3 +79,46 @@ Do not run the real USB bridge and simulator at the same time: both use port 878
 Repeat scoring with 30-second, 60-second, two-player, and practice modes. For timed games, confirm points stop at expiry; for two-player mode, confirm each basket goes to the current player and none count on the handoff screen. Spacebar and Add basket should still work.
 
 The simulator sends typed input through the same serial line parser and WebSocket server as the real bridge. It does not emulate USB drivers, serial baud rate, sensor wiring, or EE firmware timing. The physical Arduino/IR acceptance test is still required before merging into main. Confirm the firmware emits one standalone SCORE line per basket at the configured baud rate, then repeat the checks above using the beam instead of terminal input.
+
+
+## First setup on a teammate’s laptop
+
+Install Node.js, Git, and the Arduino IDE if not already available. From a terminal:
+
+```sh
+git clone --branch arduino-serial-bridge https://github.com/Advaith-1506/Hoop-game.git
+cd Hoop-game
+npm install
+```
+
+If the repository is already cloned, save/commit your own changes, then switch to `arduino-serial-bridge` and pull the latest branch. Use two terminals in that repository: one for the bridge or simulator, one for `npm run dev`. Keep both running while testing.
+
+For the EE sketch shared with this team, keep `Serial.begin(9600);` and add exactly one `Serial.println("SCORE");` immediately after `score++;`. Existing `SCORE! Total:` debug lines may stay. Upload the modified sketch before closing Serial Monitor and starting the bridge. This repository does not contain or upload firmware.
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| `node` or `npm` not found | Install a supported Node.js version and reopen the terminal. |
+| No port listed | Check the data-capable USB cable, board connection, and board-specific USB driver. |
+| Port busy / access denied | Close Serial Monitor and any other serial application; check the selected port and OS device permissions. |
+| Bridge ready but Arduino offline | Read the bridge terminal error; verify `SERIAL_PORT`, unplug/replug, and list ports again if the path changes. |
+| Connected, but no baskets | Start a game; match baud rates; confirm the firmware sends standalone SCORE lines and the beam sequence produces a valid basket. |
+| Address already in use | Stop the other bridge/simulator. Only one should run on the default port. |
+| Website says bridge offline | Keep the bridge running on the same laptop; use the localhost website and default port 8787. |
+| Every basket counts twice | Check firmware for duplicate SCORE output; do not send SCORE from two different code paths. |
+| Netlify still shows simulation mode | Expected: this setup uses a locally running website and USB bridge; hosted hardware integration is not configured. |
+
+For a different local port, set `BRIDGE_PORT` for the bridge and `VITE_BRIDGE_URL` for Vite to the matching address. Restart Vite after changing its environment:
+
+```sh
+# Bridge terminal (simulator example)
+BRIDGE_PORT=8788 npm run bridge:simulate
+```
+
+```sh
+# Website terminal
+VITE_BRIDGE_URL=ws://127.0.0.1:8788 npm run dev
+```
+
+On PowerShell set environment variables as shown in the Windows serial example above. Vite variables are build-time configuration when creating a production build. The current bridge intentionally accepts only local browser origins.
